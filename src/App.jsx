@@ -137,11 +137,11 @@ export default function App(){
     const rec=new MediaRecorder(stream,{mimeType:mt,videoBitsPerSecond:4000000});
     rec.ondataavailable=(e)=>{if(e.data.size>0)chunks.push(e.data);};
     rec.onstop=()=>{const blob=new Blob(chunks,{type:mt});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='free_return_trajectory.webm';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);setRecording(false);setRecordProgress(0);};
-    rec.start();const totalFrames=Math.ceil(res.totalTime/PLAYBACK_DT);let fi=0;
+    rec.start();const recDt=PLAYBACK_DT*playbackSpeed;const totalFrames=Math.ceil(res.totalTime/recDt);let fi=0;
     const pn={...panRef.current},cz=zoom,cf=frame,ca=angle,cm=moonOn;
-    const next=()=>{if(fi>totalFrames){setTimeout(()=>{rec.stop();},100);return;}const t=Math.min(fi*PLAYBACK_DT,res.totalTime);drawMainCanvas(rctx,600,600,res,t,cf,ca,cm,cz,pn);setSimTime(t);setRecordProgress(Math.round((fi/totalFrames)*100));fi++;requestAnimationFrame(next);};
+    const next=()=>{if(fi>totalFrames){setTimeout(()=>{rec.stop();},100);return;}const t=Math.min(fi*recDt,res.totalTime);drawMainCanvas(rctx,600,600,res,t,cf,ca,cm,cz,pn);setSimTime(t);setRecordProgress(Math.round((fi/totalFrames)*100));fi++;requestAnimationFrame(next);};
     setTimeout(next,200);
-  },[res,recording,zoom,frame,angle,moonOn,stop]);
+  },[res,recording,zoom,frame,angle,moonOn,playbackSpeed,stop]);
 
   useEffect(()=>{const cvs=canvasRef.current;if(!cvs||!res)return;const pan=panRef.current;const dpr=window.devicePixelRatio||1;const dW=cvs.clientWidth,dH=cvs.clientHeight;cvs.width=dW*dpr;cvs.height=dH*dpr;const ctx=cvs.getContext("2d");ctx.scale(dpr,dpr);drawMainCanvas(ctx,dW,dH,res,simTime,frame,angle,moonOn,zoom,pan);},[res,simTime,frame,angle,moonOn,zoom,panTick]);
 
