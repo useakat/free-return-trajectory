@@ -117,9 +117,9 @@ export default function App(){
   const canvasRef=useRef(null);
   const[speed,setSpeed]=useState(10.6826);const[angle,setAngle]=useState(0);const[moonOn,setMoonOn]=useState(true);
   const[res,setRes]=useState(null);const[simTime,setSimTime]=useState(0);const[running,setRunning]=useState(false);
-  const[frame,setFrame]=useState("inertial");const[playbackSpeed,setPlaybackSpeed]=useState(1);const[zoom,setZoom]=useState(1);
+  const[frame,setFrame]=useState("inertial");const[playbackSpeed,setPlaybackSpeed]=useState(1.5);const[zoom,setZoom]=useState(1.5);
   const af=useRef(null);const stopRef=useRef(false);const panRef=useRef({ox:0,oy:0});const[panTick,setPanTick]=useState(0);const dragRef=useRef(null);
-  const[speedStr,setSpeedStr]=useState((10.6826*V_SCALE).toFixed(3));const[angleStr,setAngleStr]=useState("0.0");const playbackRef=useRef(1);
+  const[speedStr,setSpeedStr]=useState((10.6826*V_SCALE).toFixed(3));const[angleStr,setAngleStr]=useState("0.0");const playbackRef=useRef(1.5);
   const[recording,setRecording]=useState(false);const[recordProgress,setRecordProgress]=useState(0);
   const[showHelp,setShowHelp]=useState(false);
   const[endless,setEndless]=useState(false);
@@ -293,12 +293,12 @@ export default function App(){
                 color:frame===f.key?"#1868b0":"#8090a8"}}>{f.label}</button>))}
         </div>
         <button onClick={toggleMoon} style={TB(moonOn,"#a08020","180,140,30")}>{moonOn?"🌕 月 ON":"🌑 月 OFF"}</button>
-        <button onClick={toggleEndless} style={TB(endless,"#8040c0","130,60,200")}>{endless?"∞ 無限追跡":"∞ 通常"}</button>
+        {/* <button onClick={toggleEndless} style={TB(endless,"#8040c0","130,60,200")}>{endless?"∞ 無限追跡":"∞ 通常"}</button> */}
         <button onClick={resetView} style={TB(false)}>⟲ リセット</button>
-        <button onClick={startRecording} disabled={recording||!res}
+        {/* <button onClick={startRecording} disabled={recording||!res}
           style={{...TB(recording,"#d04040","220,50,50"),cursor:(recording||!res)?"not-allowed":"pointer"}}>
           {recording?`⏺ ${recordProgress}%`:"⬇ 動画保存"}
-        </button>
+        </button> */}
       </div>
 
       {/* Canvas */}
