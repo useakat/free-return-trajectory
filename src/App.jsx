@@ -4,7 +4,7 @@ const MU=0.012150585,EARTH_X=-MU,MOON_X=1-MU,R_LEO=(6371+185)/384400,R_EARTH=637
 
 function derivs([x,y,vx,vy],mo){const x1=x+MU,x2=x-(1-MU),r1=Math.sqrt(x1*x1+y*y),r2=Math.sqrt(x2*x2+y*y),mt=mo?MU:0;return[vx,vy,2*vy+x-(1-MU)*x1/r1**3-mt*x2/r2**3,-2*vx+y-(1-MU)*y/r1**3-mt*y/r2**3];}
 function rk4(s,dt,mo){const k1=derivs(s,mo),k2=derivs(s.map((v,i)=>v+.5*dt*k1[i]),mo),k3=derivs(s.map((v,i)=>v+.5*dt*k2[i]),mo),k4=derivs(s.map((v,i)=>v+dt*k3[i]),mo);return s.map((v,i)=>v+(dt/6)*(k1[i]+2*k2[i]+2*k3[i]+k4[i]));}
-function simulate(speed,angleDeg,moonOn){const rad=angleDeg*Math.PI/180;let st=[EARTH_X+R_LEO,0,speed*Math.sin(rad),speed*Math.cos(rad)];const pts=[{x:st[0],y:st[1],t:0,vx:st[2],vy:st[3]}];let minMD=999,time=0,endReason="timeout";for(let i=0;i<800000;i++){st=rk4(st,SIM_DT,moonOn);time+=SIM_DT;const rm=Math.sqrt((st[0]-MOON_X)**2+st[1]**2);if(rm<minMD)minMD=rm;if(moonOn&&rm<R_MOON_NORM){pts.push({x:st[0],y:st[1],t:time,vx:st[2],vy:st[3]});endReason="moon_collision";break;}const re=Math.sqrt((st[0]-EARTH_X)**2+st[1]**2);if(i>500&&re<R_EARTH){pts.push({x:st[0],y:st[1],t:time,vx:st[2],vy:st[3]});endReason="earth_collision";break;}if(Math.abs(st[0])>4||Math.abs(st[1])>4){pts.push({x:st[0],y:st[1],t:time,vx:st[2],vy:st[3]});endReason="escape";break;}if(i%40===0)pts.push({x:st[0],y:st[1],t:time,vx:st[2],vy:st[3]});}return{pts,minMD,totalTime:time,endReason};}
+function simulate(speed,angleDeg,moonOn,endless=false){const rad=angleDeg*Math.PI/180;let st=[EARTH_X+R_LEO,0,speed*Math.sin(rad),speed*Math.cos(rad)];const pts=[{x:st[0],y:st[1],t:0,vx:st[2],vy:st[3]}];let minMD=999,time=0,endReason="timeout";const maxSteps=endless?3000000:800000;const sampleEvery=endless?120:40;for(let i=0;i<maxSteps;i++){st=rk4(st,SIM_DT,moonOn);time+=SIM_DT;const rm=Math.sqrt((st[0]-MOON_X)**2+st[1]**2);if(rm<minMD)minMD=rm;if(moonOn&&rm<R_MOON_NORM){pts.push({x:st[0],y:st[1],t:time,vx:st[2],vy:st[3]});endReason="moon_collision";break;}const re=Math.sqrt((st[0]-EARTH_X)**2+st[1]**2);if(i>500&&re<R_EARTH){pts.push({x:st[0],y:st[1],t:time,vx:st[2],vy:st[3]});endReason="earth_collision";break;}if(!endless&&(Math.abs(st[0])>4||Math.abs(st[1])>4)){pts.push({x:st[0],y:st[1],t:time,vx:st[2],vy:st[3]});endReason="escape";break;}if(i%sampleEvery===0)pts.push({x:st[0],y:st[1],t:time,vx:st[2],vy:st[3]});}return{pts,minMD,totalTime:time,endReason};}
 function toI(x,y,t){const c=Math.cos(t),s=Math.sin(t);return{x:x*c-y*s,y:x*s+y*c};}
 function dvKmps(s){return((s-V_CIRC)*V_SCALE).toFixed(3);}
 const V_SCALE=7.79/V_CIRC;
@@ -19,10 +19,18 @@ const btnBase={fontFamily:FONT,fontWeight:600,cursor:"pointer",borderRadius:8,tr
 function drawMainCanvas(ctx,W,H,res,simTime,frameMode,angle,moonOn,zoom,pan){
   const isIn=frameMode==="inertial";
   const visible=[];for(const p of res.pts){if(p.t<=simTime)visible.push(p);else break;}
-  let axs=[0],ays=[0];
-  if(isIn){axs.push(-1.15,1.15);ays.push(-1.15,1.15);for(const p of res.pts){const pi=toI(p.x,p.y,p.t),ei=toI(EARTH_X,0,p.t);axs.push(pi.x-ei.x);ays.push(pi.y-ei.y);}}
-  else{axs.push(EARTH_X,MOON_X);ays.push(0);for(const p of res.pts){axs.push(p.x);ays.push(p.y);}}
-  const bx0=Math.min(...axs),bx1=Math.max(...axs),by0=Math.min(...ays),by1=Math.max(...ays);
+  // Bounding box: always use normal-mode range (Earth-Moon system ± margin)
+  // so the initial zoom level is consistent regardless of endless mode.
+  // Users can zoom out manually to see the full trajectory.
+  let bx0=0,bx1=0,by0=0,by1=0;
+  const BBOX_LIMIT=2.5; // max extent in normalized units (~960,000 km)
+  if(isIn){
+    bx0=-1.15;bx1=1.15;by0=-1.15;by1=1.15;
+    for(const p of res.pts){const pi=toI(p.x,p.y,p.t),ei=toI(EARTH_X,0,p.t);const wx=pi.x-ei.x,wy=pi.y-ei.y;if(wx<bx0)bx0=Math.max(wx,-BBOX_LIMIT);if(wx>bx1)bx1=Math.min(wx,BBOX_LIMIT);if(wy<by0)by0=Math.max(wy,-BBOX_LIMIT);if(wy>by1)by1=Math.min(wy,BBOX_LIMIT);}
+  }else{
+    bx0=Math.min(0,EARTH_X,MOON_X);bx1=Math.max(0,EARTH_X,MOON_X);by0=0;by1=0;
+    for(const p of res.pts){const cx=Math.max(-BBOX_LIMIT,Math.min(BBOX_LIMIT,p.x));const cy=Math.max(-BBOX_LIMIT,Math.min(BBOX_LIMIT,p.y));if(cx<bx0)bx0=cx;if(cx>bx1)bx1=cx;if(cy<by0)by0=cy;if(cy>by1)by1=cy;}
+  }
   const rX=bx1-bx0||1,rY=by1-by0||1,cX=(bx0+bx1)/2,cY=(by0+by1)/2;
   const baseSc=Math.min(W,H)*.64/Math.max(rX,rY),sc=baseSc*zoom;
   const ccx=W/2-cX*sc+pan.ox,ccy=H/2+cY*sc+pan.oy;
@@ -114,11 +122,12 @@ export default function App(){
   const[speedStr,setSpeedStr]=useState((10.6826*V_SCALE).toFixed(3));const[angleStr,setAngleStr]=useState("0.0");const playbackRef=useRef(1);
   const[recording,setRecording]=useState(false);const[recordProgress,setRecordProgress]=useState(0);
   const[showHelp,setShowHelp]=useState(false);
+  const[endless,setEndless]=useState(false);
   useEffect(()=>{playbackRef.current=playbackSpeed;},[playbackSpeed]);
 
-  const go=useCallback((s,a,m)=>{stopRef.current=true;if(af.current){cancelAnimationFrame(af.current);af.current=null;}const r=simulate(s,a,m);setRes(r);setSimTime(0);stopRef.current=false;setRunning(true);},[]);
+  const go=useCallback((s,a,m,el)=>{stopRef.current=true;if(af.current){cancelAnimationFrame(af.current);af.current=null;}const r=simulate(s,a,m,el);setRes(r);setSimTime(0);stopRef.current=false;setRunning(true);},[]);
   const stop=useCallback(()=>{stopRef.current=true;if(af.current){cancelAnimationFrame(af.current);af.current=null;}setRunning(false);},[]);
-  useEffect(()=>{go(speed,angle,moonOn);},[]);
+  useEffect(()=>{go(speed,angle,moonOn,endless);},[]);
   useEffect(()=>{if(!running||!res)return;stopRef.current=false;let cur=simTime;const tick=()=>{if(stopRef.current)return;cur+=PLAYBACK_DT*playbackRef.current;if(cur>=res.totalTime){cur=res.totalTime;setSimTime(cur);setRunning(false);return;}setSimTime(cur);af.current=requestAnimationFrame(tick);};af.current=requestAnimationFrame(tick);return()=>{if(af.current){cancelAnimationFrame(af.current);af.current=null;}};},[running,res]);
 
   const handlePointerDown=(e)=>{if(e.button!==0)return;const cvs=canvasRef.current;if(!cvs)return;cvs.setPointerCapture(e.pointerId);const c=panRef.current;dragRef.current={sx:e.clientX,sy:e.clientY,sox:c.ox,soy:c.oy};};
@@ -145,7 +154,8 @@ export default function App(){
 
   useEffect(()=>{const cvs=canvasRef.current;if(!cvs||!res)return;const pan=panRef.current;const dpr=window.devicePixelRatio||1;const dW=cvs.clientWidth,dH=cvs.clientHeight;cvs.width=dW*dpr;cvs.height=dH*dpr;const ctx=cvs.getContext("2d");ctx.scale(dpr,dpr);drawMainCanvas(ctx,dW,dH,res,simTime,frame,angle,moonOn,zoom,pan);},[res,simTime,frame,angle,moonOn,zoom,panTick]);
 
-  const toggleMoon=()=>{const n=!moonOn;setMoonOn(n);go(speed,angle,n);};
+  const toggleMoon=()=>{const n=!moonOn;setMoonOn(n);go(speed,angle,n,endless);};
+  const toggleEndless=()=>{const n=!endless;setEndless(n);go(speed,angle,moonOn,n);};
 
   const TB=(active,ac="#2070c0",abc="70,130,220")=>({...btnBase,padding:"8px 16px",fontSize:14,
     background:active?`rgba(${abc},0.1)`:"#fff",
@@ -262,7 +272,7 @@ export default function App(){
           {running?(
             <button onClick={stop} style={{...btnBase,padding:"10px 28px",fontSize:15,background:"rgba(220,50,50,0.08)",border:"1px solid rgba(220,50,50,0.3)",color:"#d04040"}}>⏹ 停止</button>
           ):(
-            <button onClick={()=>go(speed,angle,moonOn)} disabled={recording}
+            <button onClick={()=>go(speed,angle,moonOn,endless)} disabled={recording}
               style={{...btnBase,padding:"10px 28px",fontSize:15,
                 background:recording?"#f5f7fa":"linear-gradient(135deg,#2080d0,#1868b0)",
                 border:recording?"1px solid #d8dce4":"1px solid #1868b0",color:recording?"#b0bcc8":"#fff",
@@ -283,6 +293,7 @@ export default function App(){
                 color:frame===f.key?"#1868b0":"#8090a8"}}>{f.label}</button>))}
         </div>
         <button onClick={toggleMoon} style={TB(moonOn,"#a08020","180,140,30")}>{moonOn?"🌕 月 ON":"🌑 月 OFF"}</button>
+        <button onClick={toggleEndless} style={TB(endless,"#8040c0","130,60,200")}>{endless?"∞ 無限追跡":"∞ 通常"}</button>
         <button onClick={resetView} style={TB(false)}>⟲ リセット</button>
         <button onClick={startRecording} disabled={recording||!res}
           style={{...TB(recording,"#d04040","220,50,50"),cursor:(recording||!res)?"not-allowed":"pointer"}}>
